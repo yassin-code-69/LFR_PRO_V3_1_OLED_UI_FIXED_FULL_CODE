@@ -27,4 +27,11 @@
 - **Adaptive Contrast Auto-Thresholding**: Dynamically computes threshold based on real-time background and line contrast (35% above noise floor), rendering the robot immune to track lighting fluctuations.
 - **Plotter-Friendly Telemetry**: Compact 20Hz Serial1 telemetry format (`P:<pos> L:<left> R:<right> N:<active>`) for real-time Bluetooth graphing.
 
+## Smooth Turning & Gap Navigation Stabilization
+- **Silky-Smooth Differential Steering**: Removed abrupt discrete braking drops and inner-wheel reverse step thresholds. Inner wheel now decelerates smoothly towards zero with continuous PID output, completely eliminating corner twitches and violent jolts.
+- **Calibrated 250Hz Control Loop**: Adjusted loop period to 4000 µs (250 Hz) to harmonize with DC motor mechanical response and BTS7960 slew rate.
+- **Gentle Progressive PID & Low-Pass Derivative**: Softened cubic curve to 0.003 and increased D-filter smoothing (0.82/0.18), eliminating high-frequency derivative sensor chatter.
+- **Straightforward Gap Trajectory Lock**: Completely removed premature 360° spinning in the middle of straight gaps. In `GapMode::Recover`, robot now holds steady forward cruising momentum with gentle trajectory tracking and seamlessly snaps back onto the line the moment it is detected.
+
+
 

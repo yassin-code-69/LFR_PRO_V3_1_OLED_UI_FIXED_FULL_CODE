@@ -185,13 +185,14 @@ Command Controller::tick(const SensorFrame &f,const Settings &s,
   }
   if(!f.seen) {
     // Immediate edge loss: steer toward last observed edge rather than coast ahead.
-    if(lastPos_<=-3600 || lastPos_>=3600) {
+    if(lastPos_<=-3800 || lastPos_>=3800) {
       startPivot(lastPos_<0?-1:1,nowMs,false,85,800);
       return pivot(s);
     }
     pid_.reset(float(lastPos_)*0.001f);
     enter(DriveState::Gap,nowMs);
-    return Command{int16_t(s.curvePWM),int16_t(s.curvePWM)};
+    const int16_t forwardPWM = int16_t((uint16_t(s.basePWM) + uint16_t(s.curvePWM)) / 2U);
+    return Command{forwardPWM,forwardPWM};
   }
 
   // For real 90-degree corners, the far edge can be the only detected region.
