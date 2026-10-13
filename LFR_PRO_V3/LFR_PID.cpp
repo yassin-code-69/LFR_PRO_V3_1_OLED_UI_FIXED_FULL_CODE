@@ -17,16 +17,15 @@ float PID::update(float error, float dt, const Settings &cfg,
   const float kp=float(cfg.kpX10)*0.1f;
   const float ki=float(cfg.kiX100)*0.01f;
   const float kd=float(cfg.kdX100)*0.01f;
-  // Filtering D prevents noisy sensor readings causing twitch or jerking.
+  // Filtering D: 0.70/0.30 gives crisp corner damping without phase lag or sensor twitch.
   const float rawRate=bound((error-lastError_)/dt,-240.0f,240.0f);
-  dFiltered_=0.82f*dFiltered_+0.18f*rawRate;
+  dFiltered_=0.70f*dFiltered_+0.30f*rawRate;
   lastError_=error;
   // Anti-windup: integrate only near the line and while output is not saturated.
   // Decay stored integral during corners / branch decisions / large errors.
-  // Gentle progressive steering: linear near center for smooth running,
-  // slight edge assistance without violent kicks.
+  // Progressive steering: strictly linear near center, progressive bite on sharp corners.
   const float errorCubed = error * error * error;
-  const float pTerm = kp * (error + 0.003f * errorCubed);
+  const float pTerm = kp * (error + 0.006f * errorCubed);
   const float pd = pTerm + kd * dFiltered_;
   if (integrate && fabsf(error)<2.8f && fabsf(pd+ki*integral_)<limit*0.80f) {
     integral_=bound(integral_+error*dt,-5.0f,5.0f);

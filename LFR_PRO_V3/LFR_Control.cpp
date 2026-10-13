@@ -15,7 +15,7 @@ void Controller::start(uint32_t nowMs,int16_t initialPosition) {
   lastPos_=initialPosition;
   seenFrames_=centerFrames_=edgeFrames_=junctionFrames_=0;
   edgeDirection_=0;oldCenterCleared_=false;junctionLatched_=false;
-  pivotDirection_=-1;pivotMinimumMs_=90;pivotMaximumMs_=900;
+  pivotDirection_=-1;pivotMinimumMs_=38;pivotMaximumMs_=900;
   junctions_=routeUsed_=0;
   pending_=RouteStep::Straight;
   pid_.reset(float(initialPosition)*0.001f);
@@ -94,9 +94,12 @@ Command Controller::follow(const SensorFrame &f,const Settings &s,float dt) {
   const float steering=pid_.update(error,dt,s,float(s.maxPWM),stable);
   lastPos_=f.pos;
 
-  // Silky-smooth differential steering: inner wheel slows proportionally toward 0 (no reverse jerk)
-  const int16_t left=clamp16(int32_t(speed+steering),0,s.maxPWM);
-  const int16_t right=clamp16(int32_t(speed-steering),0,s.maxPWM);
+  // Proportional differential steering:
+  // Smoothly allows the inner wheel to slow down, cross zero, and apply active
+  // counter-torque (up to 65% of turnPWM) for crisp, lightning-fast cornering without understeer.
+  const int16_t minWheel = -int16_t(s.turnPWM * 0.65f);
+  const int16_t left=clamp16(int32_t(speed+steering),minWheel,s.maxPWM);
+  const int16_t right=clamp16(int32_t(speed-steering),minWheel,s.maxPWM);
   return Command{left,right};
 }
 Command Controller::tick(const SensorFrame &f,const Settings &s,
@@ -116,11 +119,11 @@ Command Controller::tick(const SensorFrame &f,const Settings &s,
        !f.junction && !f.fullMarker && f.pos>-1900 && f.pos<1900) {
       if(centerFrames_<8)++centerFrames_;
     } else centerFrames_=0;
-    if(elapsed>=pivotMinimumMs_ && centerFrames_>=3) {
+    if(elapsed>=pivotMinimumMs_ && centerFrames_>=2) {
       enter(DriveState::Follow,nowMs);
       pid_.reset(float(f.pos)*0.001f);lastPos_=f.pos;
-      cooldownUntil_=nowMs+200;
-      return Command{int16_t(s.curvePWM),int16_t(s.curvePWM)};
+      cooldownUntil_=nowMs+150;
+      return follow(f,s,dt);
     }
     return pivot(s);
   }
@@ -186,7 +189,7 @@ Command Controller::tick(const SensorFrame &f,const Settings &s,
   if(!f.seen) {
     // Immediate edge loss: steer toward last observed edge rather than coast ahead.
     if(lastPos_<=-3800 || lastPos_>=3800) {
-      startPivot(lastPos_<0?-1:1,nowMs,false,85,800);
+      startPivot(lastPos_<0?-1:1,nowMs,false,38,800);
       return pivot(s);
     }
     pid_.reset(float(lastPos_)*0.001f);
@@ -206,7 +209,7 @@ Command Controller::tick(const SensorFrame &f,const Settings &s,
   else if(edgeFrames_<5) ++edgeFrames_;
   if(edgeFrames_>=2) {
     lastPos_=f.pos;
-    startPivot(side,nowMs,f.center,90,900);
+    startPivot(side,nowMs,f.center,38,900);
     return pivot(s);
   }
 

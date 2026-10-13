@@ -101,7 +101,7 @@ inline Settings defaultSettings() {
   s.lineMode=0; s.navMode=0; s.gapMode=0; s.speedProfile=0;
   s.mirror=0; s.finishOn=0; s.routeCount=0;
   s.basePWM=76; s.maxPWM=112; s.curvePWM=52; s.turnPWM=83;
-  s.accelStep=7; s.brakeStep=24; s.junctionAdvanceMs=35;
+  s.accelStep=10; s.brakeStep=28; s.junctionAdvanceMs=35;
   s.kpX10=120; s.kiX100=120; s.kdX100=18;
   return s;
 }
@@ -109,13 +109,17 @@ inline void setProfile(Settings &s, uint8_t profile) {
   s.speedProfile=profile%3;
   if (s.speedProfile==0) {
     s.basePWM=76; s.maxPWM=112; s.curvePWM=52; s.turnPWM=83;
+    s.accelStep=10; s.brakeStep=28;
     s.kpX10=120; s.kiX100=120; s.kdX100=18;
   } else if (s.speedProfile==1) {
     s.basePWM=96; s.maxPWM=150; s.curvePWM=62; s.turnPWM=100;
+    s.accelStep=12; s.brakeStep=32;
     s.kpX10=140; s.kiX100=90; s.kdX100=23;
   } else {
-    s.basePWM=119; s.maxPWM=185; s.curvePWM=74; s.turnPWM=112;
-    s.kpX10=155; s.kiX100=75; s.kdX100=28;
+    // Pro Competition Profile (Kakarobot High-Speed Spec: Pure PD, high damping)
+    s.basePWM=140; s.maxPWM=210; s.curvePWM=105; s.turnPWM=120;
+    s.accelStep=16; s.brakeStep=40;
+    s.kpX10=200; s.kiX100=0; s.kdX100=38;
   }
 }
 inline bool saneSettings(const Settings &s) {

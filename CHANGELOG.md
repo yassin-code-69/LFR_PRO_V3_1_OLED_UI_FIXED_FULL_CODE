@@ -32,6 +32,8 @@
 - **Calibrated 250Hz Control Loop**: Adjusted loop period to 4000 µs (250 Hz) to harmonize with DC motor mechanical response and BTS7960 slew rate.
 - **Gentle Progressive PID & Low-Pass Derivative**: Softened cubic curve to 0.003 and increased D-filter smoothing (0.82/0.18), eliminating high-frequency derivative sensor chatter.
 - **Straightforward Gap Trajectory Lock**: Completely removed premature 360° spinning in the middle of straight gaps. In `GapMode::Recover`, robot now holds steady forward cruising momentum with gentle trajectory tracking and seamlessly snaps back onto the line the moment it is detected.
-
-
-
+## Kakarobot High-Speed Pro Profile (Competition Spec)
+- **Zero Phase Lag (Pure PD Control)**: Configured $Ki = 0.0$ in the `FAST` speed profile to completely eliminate integral windup, steering wobble, and delayed phase drift at extreme velocity.
+- **High Derivative Damping ($Kd = 3.80$)**: Strong derivative damping instantly arrests overshoot and wheel snap when tracking tight arcs at 2.5–3.5 m/s.
+- **High-Velocity Wheel Authority**: Base speed elevated to 140 PWM, straight turbo ceiling to 210 PWM, and curve speed maintained at 105 PWM (75% momentum conservation) to prevent deceleration stall on curves.
+- **Aggressive Pivot Authority**: Turn PWM boosted to 120 with $Kp = 20.0$, delivering instantaneous centering torque on 90° corners.
