@@ -1,0 +1,19 @@
+LFR PRO V3.1 Professional OLED UI Fix — test report
+
+Host environment: g++ -std=c++17 -Wall -Wextra -Werror -O2, STM32 pin and I2C stubs.
+PASS  PID P/I/D control, integral anti-windup and output saturation
+PASS  Sensor normalization, line polarity, left/right steering
+PASS  Pivot corner recovery, reacquisition, timeout safe stop
+PASS  Junction navigation, SCRIPT route, gap STOP/RECOVER
+PASS  EEPROM dual-slot CRC and V1 migration
+PASS  Motor braking/direction and BACK stop
+PASS  New 0-9 digit glyph pixel uniqueness; digit 1 unlike uppercase I
+PASS  MODE editor preview/change/cancel/apply for SPEED/LINE/NAV/GAP/FINISH/MIRROR
+PASS  Speed profile change updates original V3 PWM/PID presets only on APPLY
+PASS  RESET DEFAULTS requires confirmation and BACK cancels
+PASS  Entire Arduino sketch builds against stubs
+PASS  OLED 21-screen framebuffer snapshots generated
+NOT RUN  Full real STM32duino ARM toolchain compilation (not installed in runtime)
+NOT RUN  On-device OLED display & physical 1000-RPM motor testing
+
+These test results do not certify an error-free firmware on physical hardware.

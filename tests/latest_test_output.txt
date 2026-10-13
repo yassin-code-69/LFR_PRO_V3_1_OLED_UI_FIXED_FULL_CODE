@@ -1,0 +1,13 @@
+PASS real integral, saturation, PID anti-windup
+PASS differential steering physical sign
+PASS left/right corner pivot, reacquisition, timeout
+PASS short gap safety and STOP policy
+PASS scripted junction route and delayed pivot
+PASS sensor position + black/white line inversion
+PASS motor direction braking and safe reversal
+PASS CRC EEPROM dual-slot save and fallback
+PASS V1/V1.1 CRC-verified calibration migration and V3 upgrade
+PASS tiny SSD1306 init and drawing calls
+ALL V3 HOST TESTS PASSED
+PASS full Arduino sketch syntax under mock API
+PASS full UI smoke: boot / locked race / sensor live / motor BACK stop
