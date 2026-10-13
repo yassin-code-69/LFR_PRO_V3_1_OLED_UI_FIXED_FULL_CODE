@@ -98,8 +98,9 @@ void Sensor::read(SensorFrame &f,const Calibration &cal,bool valid,const Setting
     if(f.norm[i]<thresh) {++i;continue;}
     int32_t weightSum=0,positionSum=0;
     while(i<SENSOR_COUNT && f.norm[i]>=thresh) {
-      const uint16_t w=f.norm[i];
-      weightSum+=w;
+      // Baseline-subtracted centroid: amplifies true line peak, rejects background noise
+      const uint32_t w=uint32_t(f.norm[i]-thresh)+25U;
+      weightSum+=int32_t(w);
       positionSum+=int32_t(w)*(int32_t(i)*1000-6500);
       ++i;
     }

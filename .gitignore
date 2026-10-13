@@ -1,0 +1,57 @@
+# ====================================================================
+# Git Ignore for STM32 / Arduino / C++ Line Follower Robot (LFR PRO)
+# ====================================================================
+
+# --- Compiled Object Files & Host Test Binaries ---
+*.o
+*.obj
+*.exe
+*.out
+*.app
+*.d
+
+# Host test builds in tests/
+tests/*.exe
+tests/*.o
+tests/sketch.o
+tests/test_v3.exe
+tests/test_ui.exe
+tests/test_oled_visual.exe
+tests/test_mode_editor.exe
+
+# Batch scripts
+*.bat
+
+# Image & Preview assets
+*.jpg
+*.jpeg
+*.pgm
+
+# Local mock previews / generated artifacts
+/previews/
+tests/pdf_images/
+tests/flate_images/
+
+# --- Arduino / STM32 Build Artifacts ---
+build/
+*.bin
+*.hex
+*.elf
+*.map
+
+# --- IDE & Editor Artifacts ---
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosv
+*.sln.docstates
+
+# --- OS Generated Files ---
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+*.swp
+*~

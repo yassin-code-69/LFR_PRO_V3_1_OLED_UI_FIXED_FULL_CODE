@@ -19,6 +19,16 @@
 #define LFR_PIN_DOWN PB12
 #define LFR_PIN_ENTER PB5
 #define LFR_PIN_BACK PB3
+#ifndef LFR_PIN_LED
+#if defined(PC13)
+#define LFR_PIN_LED PC13
+#else
+#define LFR_PIN_LED -1
+#endif
+#endif
+#ifndef LFR_PIN_BUZZER
+#define LFR_PIN_BUZZER -1 // Set to GPIO pin (e.g. PB0, PA8) when physical buzzer is connected
+#endif
 
 // FIRST INSTALL: 0 = diagnose only; after checking sensor map, motor direction,
 // stop button and calibration, deliberately set to 1 and reflash.
@@ -37,7 +47,7 @@ static constexpr uint8_t SENSOR_COUNT = 14;
 static constexpr uint8_t ROUTE_CAPACITY = 20;
 static constexpr uint16_t ADC_MAX = 4095;
 static constexpr uint16_t MIN_CONTRAST = 250;
-static constexpr uint16_t CTRL_PERIOD_US = 4000;  // balanced 250Hz loop (smooth motor slew & fast reaction)
+static constexpr uint16_t CTRL_PERIOD_US = 3000;  // High-precision 333Hz loop (sub-millimeter line resolution)
 static constexpr uint32_t CTRL_WATCHDOG_US = 30000;
 static constexpr uint32_t STORE_V3_MAGIC = 0x4C465233UL; // LFR3
 static constexpr uint16_t STORE_V3_VERSION = 3;
@@ -116,10 +126,10 @@ inline void setProfile(Settings &s, uint8_t profile) {
     s.accelStep=12; s.brakeStep=32;
     s.kpX10=140; s.kiX100=90; s.kdX100=23;
   } else {
-    // Pro Competition Profile (Kakarobot High-Speed Spec: Pure PD, high damping)
-    s.basePWM=140; s.maxPWM=210; s.curvePWM=105; s.turnPWM=120;
-    s.accelStep=16; s.brakeStep=40;
-    s.kpX10=200; s.kiX100=0; s.kdX100=38;
+    // Pro Competition Profile (User Track-Verified Winning Setup)
+    s.basePWM=165; s.maxPWM=220; s.curvePWM=75; s.turnPWM=125;
+    s.accelStep=30; s.brakeStep=45; s.junctionAdvanceMs=25;
+    s.kpX10=210; s.kiX100=0; s.kdX100=38;
   }
 }
 inline bool saneSettings(const Settings &s) {

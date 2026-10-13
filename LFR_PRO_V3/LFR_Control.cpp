@@ -69,7 +69,13 @@ Command Controller::follow(const SensorFrame &f,const Settings &s,float dt) {
   const float rate=clampF((error-previous)/dt,-180.f,180.f);
   const float anglePenalty=fabsf(error)/3.8f;
   const float speedPenalty=fabsf(rate)/70.f;
-  const float curvature=clampF(fmaxf(anglePenalty,speedPenalty),0.f,1.f);
+  // Radar Edge Lookahead: Outer sensors (0-1 or 12-13) detect line approaching edge,
+  // pre-shaping curvature before centrifugal drift throws the chassis off!
+  float edgePenalty=0.0f;
+  if((f.leftEdge || f.rightEdge) && !f.junction && !f.fullMarker && fabsf(error)>3.2f) {
+    edgePenalty=0.80f;
+  }
+  const float curvature=clampF(fmaxf(fmaxf(anglePenalty,speedPenalty),edgePenalty),0.f,1.f);
 
   // Dynamic Straightaway Turbo Boost:
   // Smoothly ramp up toward maxPWM when dead center (<0.65) and calm rate (<18)

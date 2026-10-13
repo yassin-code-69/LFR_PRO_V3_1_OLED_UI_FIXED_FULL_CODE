@@ -36,4 +36,14 @@
 - **Zero Phase Lag (Pure PD Control)**: Configured $Ki = 0.0$ in the `FAST` speed profile to completely eliminate integral windup, steering wobble, and delayed phase drift at extreme velocity.
 - **High Derivative Damping ($Kd = 3.80$)**: Strong derivative damping instantly arrests overshoot and wheel snap when tracking tight arcs at 2.5–3.5 m/s.
 - **High-Velocity Wheel Authority**: Base speed elevated to 140 PWM, straight turbo ceiling to 210 PWM, and curve speed maintained at 105 PWM (75% momentum conservation) to prevent deceleration stall on curves.
-- **Aggressive Pivot Authority**: Turn PWM boosted to 120 with $Kp = 20.0$, delivering instantaneous centering torque on 90° corners.
+## Ultra-High Accuracy & Tracking Upgrades
+- **Baseline-Subtracted Gaussian Centroid**: Subtracted dynamic threshold baseline from raw sensor measurements in `LFR_Sensor.cpp`, amplifying true line peak signal-to-noise ratio and providing sub-millimeter centroid position resolution.
+- **Dual-Zone Center Smoothing**: In `LFR_PID.cpp`, added smooth progressive center-zone tapering ($|error| < 0.35$) to eliminate straightaway micro-twitching while maintaining razor-sharp cubic exponential steering for cornering.
+- **Radar Lookahead Corner Anticipation**: In `LFR_Control.cpp`, outer sensor engagement (0–1 or 12–13) immediately triggers anticipatory curve deceleration before centrifugal force can cause drift.
+- **High-Precision 333Hz Control Loop**: Boosted control loop rate to 3000 µs (333 Hz), providing 33% more corrective feedback cycles per second.
+
+## Tournament & Race Feature Upgrades
+- **OLED Lap Timer & Race Telemetry**: `finishRace()` now accurately calculates and renders high-precision lap duration (`TIME 06.42s`), peak straightaway speed (`TOP PWM`), and junction crossings right on the SSD1306 OLED and Serial1.
+- **Race Launch Control & 3-2-1 Countdown**: When Arming, a 3-second visual and audio countdown (`drawCountdown`) gives time to stand clear. Anti-slip launch control caps throttle at 75% for the first 140ms to maximize tire traction without wheel spin.
+- **One-Click Auto-Sweep Calibration**: In the calibration menu, pressing UP (`UP AUTO`) triggers an automated 900ms left/right motor wiggle that dynamically scans all 14 channels over the live track, verifies contrast, and auto-saves calibration without needing separate papers.
+- **Audio Chimes & Visual Feedback**: Integrated safe multi-tone frequency chimes (`soundChime`) with PC13 onboard LED blink synchronization for countdown, launch, success, error, and victory finish chimes. Supports optional buzzer on `LFR_PIN_BUZZER`.

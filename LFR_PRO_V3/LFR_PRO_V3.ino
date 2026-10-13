@@ -44,9 +44,56 @@ static uint8_t modeDraft=0;
 
 
 enum class Page : uint8_t {
-  Menu,SensorLive,ScanPrompt,Notice,Route,Tune,Arm,Race,Result,MotorPrompt,MotorTest,ModeSelect,ResetConfirm
+  Menu,SensorLive,ScanPrompt,Notice,Route,Tune,Arm,Race,Result,MotorPrompt,MotorTest,ModeSelect,ResetConfirm,Countdown
 };
 static Page page=Page::Menu;
+
+enum class Chime : uint8_t { Beep, Countdown, Go, Success, Error, Finish };
+static void soundChime(Chime c) {
+  (void)c;
+#if !defined(LFR_UI_TEST_ACCESS) && !defined(UNIT_TEST)
+#if defined(LFR_PIN_LED) && (LFR_PIN_LED >= 0)
+  pinMode(LFR_PIN_LED, OUTPUT);
+  digitalWrite(LFR_PIN_LED, LOW);
+#endif
+  uint16_t freq = 0;
+  uint16_t durMs = 0;
+  switch(c) {
+    case Chime::Beep:      freq = 1800; durMs = 35; break;
+    case Chime::Countdown: freq = 1300; durMs = 60; break;
+    case Chime::Go:        freq = 2400; durMs = 180; break;
+    case Chime::Success:   freq = 2000; durMs = 100; break;
+    case Chime::Error:     freq = 650;  durMs = 200; break;
+    case Chime::Finish:    freq = 2200; durMs = 250; break;
+  }
+#if defined(LFR_PIN_BUZZER) && (LFR_PIN_BUZZER >= 0)
+  pinMode(LFR_PIN_BUZZER, OUTPUT);
+  if(freq > 0) {
+    const uint32_t halfPeriodUs = 500000UL / freq;
+    const uint32_t endUs = micros() + uint32_t(durMs) * 1000UL;
+    while(micros() < endUs) {
+      digitalWrite(LFR_PIN_BUZZER, HIGH);
+      delayMicroseconds(halfPeriodUs);
+      digitalWrite(LFR_PIN_BUZZER, LOW);
+      delayMicroseconds(halfPeriodUs);
+    }
+  }
+#else
+  (void)freq;
+  delay(durMs);
+#endif
+#if defined(LFR_PIN_LED) && (LFR_PIN_LED >= 0)
+  digitalWrite(LFR_PIN_LED, HIGH);
+#endif
+#endif
+}
+
+static uint32_t raceStartMs = 0;
+static uint32_t raceElapsedMs = 0;
+static int16_t raceTopSpeed = 0;
+static uint32_t raceLaunchUntilMs = 0;
+static uint32_t countdownStartMs = 0;
+static uint8_t countdownStep = 0;
 static const char* const names[]={
   "RACE / ARM", "SENSOR LIVE", "WHITE CAL", "BLACK CAL",
   "SPEED", "PID TUNING", "LINE", "NAV",
@@ -249,9 +296,68 @@ static void drawScan() {
   page=Page::ScanPrompt;
   topBar(scanBlack?"BLACK SCAN":"WHITE SCAN",scanBlack?"2/2":"1/2");
   uiCentered(16,scanBlack?"FULL BLACK PAPER":"FULL WHITE PAPER");
-  uiCentered(29,"SENSOR GAP 5MM");
-  uiCentered(41,"MOTORS OFF / STILL");
-  footer("BACK","ENT SCAN");oled.show();
+  uiCentered(29,"OR PRESS UP KEY");
+  uiCentered(41,"FOR AUTO SWEEP");
+  footer("UP AUTO","ENT SCAN");oled.show();
+}
+static void performAutoSweep() {
+  motors.stop();
+  noticeOne="SWEEPING 14 CH";
+  noticeTwo="WIGGLING ON LINE";
+  page=Page::Notice;
+  topBar("AUTO CAL SWEEP","RUN");
+  uiCentered(18,noticeOne);
+  uiCentered(33,noticeTwo);
+  footer("BACK ABORT","PLEASE WAIT");oled.show();
+
+  uint16_t minVals[SENSOR_COUNT];
+  uint16_t maxVals[SENSOR_COUNT];
+  for(uint8_t i=0;i<SENSOR_COUNT;++i) {
+    minVals[i]=ADC_MAX;
+    maxVals[i]=0;
+  }
+  const int16_t sweepPWM=55;
+  Settings sweepSettings=settings;
+  sweepSettings.maxPWM=70;
+  sweepSettings.accelStep=10;
+  sweepSettings.brakeStep=20;
+
+  const uint32_t startMs=millis();
+  while(millis()-startMs<900) {
+    if(backIsDown()) {motors.stop();notice("AUTO CAL","ABORTED BY USER");return;}
+    const uint32_t elapsed=millis()-startMs;
+    if(elapsed<225) {
+      motors.drive(Command{int16_t(-sweepPWM),sweepPWM},sweepSettings,true);
+    } else if(elapsed<675) {
+      motors.drive(Command{sweepPWM,int16_t(-sweepPWM)},sweepSettings,true);
+    } else {
+      motors.drive(Command{int16_t(-sweepPWM),sweepPWM},sweepSettings,true);
+    }
+    SensorFrame f={};
+    sensor.read(f,calibration,false,settings);
+    for(uint8_t i=0;i<SENSOR_COUNT;++i) {
+      const uint16_t raw=f.raw[i];
+      if(raw<minVals[i]) minVals[i]=raw;
+      if(raw>maxVals[i]) maxVals[i]=raw;
+    }
+    delay(2);
+  }
+  motors.stop();
+  for(uint8_t i=0;i<SENSOR_COUNT;++i) {
+    pendingCalibration.white[i]=minVals[i];
+    pendingCalibration.black[i]=maxVals[i];
+  }
+  if(validCalibration(pendingCalibration)) {
+    calibration=pendingCalibration;
+    haveCalibration=true;
+    changed=true;
+    sensor.resetTracking();
+    soundChime(Chime::Success);
+    notice("AUTO CAL SUCCESS","14/14 SENSORS OK");
+  } else {
+    soundChime(Chime::Error);
+    notice("AUTO CAL FAILED","CHECK CONTRAST");
+  }
 }
 static void performScan() {
   motors.stop();
@@ -277,6 +383,7 @@ static void performScan() {
     haveCalibration=true;
     scannedWhite=scannedBlack=false;
     sensor.resetTracking();changed=true;
+    soundChime(Chime::Success);
     notice("CAL VALID 14/14","USE SAVE SETTINGS");return;
   }
   notice("SURFACE CAPTURED","SCAN OTHER COLOR");
@@ -446,14 +553,41 @@ static void motorBenchStart() {
   uiCentered(36,"BACK = STOP");
   footer("WHEELS OFF","RUNNING");oled.show();
 }
+static void drawCountdown(uint8_t count) {
+  page=Page::Countdown;
+  topBar("RACE LAUNCH","READY");
+  char num[4]={char('0'+count),0};
+  oled.textBig(58,22,num,true);
+  uiCentered(46,"STAND CLEAR");
+  footer("BACK CANCEL","COUNTDOWN");oled.show();
+}
 static void finishRace(const char *reason) {
   motors.stop();controller.stop();page=Page::Result;
-  topBar("RACE RESULT","STOP");
-  uiCentered(17,reason);
-  oled.text(2,32,"JUNCTIONS");oled.number(65,32,controller.junctionCount());
-  oled.text(2,44,"ROUTE USED");oled.number(77,44,controller.routeUsed());
+  raceElapsedMs=millis()-raceStartMs;
+  soundChime(Chime::Finish);
+  topBar("RACE RESULT",reason);
+
+  const uint16_t sec=uint16_t(raceElapsedMs/1000U);
+  const uint16_t ms10=uint16_t((raceElapsedMs%1000U)/10U);
+  char timeBuf[12];
+  timeBuf[0]=char('0'+(sec/10U)%10U);
+  timeBuf[1]=char('0'+sec%10U);
+  timeBuf[2]='.';
+  timeBuf[3]=char('0'+(ms10/10U)%10U);
+  timeBuf[4]=char('0'+ms10%10U);
+  timeBuf[5]='s';
+  timeBuf[6]=0;
+
+  oled.text(2,16,"TIME");
+  oled.textBig(36,15,timeBuf,true);
+  oled.text(2,34,"TOP PWM");
+  oled.number(55,34,raceTopSpeed);
+  oled.text(2,45,"JUNCTIONS");
+  oled.number(65,45,controller.junctionCount());
   footer("BACK MENU","ENT OK");oled.show();
-  Serial1.print("RACE STOP:");Serial1.println(reason);
+  Serial1.print("RACE TIME:");Serial1.print(timeBuf);
+  Serial1.print(" TOP_PWM:");Serial1.print(raceTopSpeed);
+  Serial1.print(" STOP:");Serial1.println(reason);
 }
 static void raceStart() {
   motors.stop();
@@ -470,6 +604,9 @@ static void raceStart() {
     notice("START LINE INVALID","CENTER ON LINE");return;
   }
   page=Page::Race;
+  raceStartMs=millis();
+  raceLaunchUntilMs=raceStartMs+140; // 140ms anti-slip launch cap
+  raceTopSpeed=0;
   topBar("RACE ACTIVE",profileName());
   uiCentered(17,"FULL PID RUNNING");
   uiCentered(31,navName());
@@ -480,6 +617,27 @@ static void raceStart() {
 #if LFR_RACE_TELEMETRY
   lastTelemMs=millis();
 #endif
+#endif
+}
+static void armLaunch() {
+  motors.stop();
+#if LFR_ALLOW_RACE_START == 0
+  notice("RACE LOCKED","SET FLAG IN CONFIG");return;
+#else
+  if(!haveCalibration) {notice("NO CALIBRATION","SCAN WHITE/BLACK");return;}
+  if(!saneSettings(settings)) {notice("BAD SETTINGS","REVIEW TUNING");return;}
+  if(settings.navMode==uint8_t(NavMode::Script) && !settings.routeCount) {
+    notice("EMPTY ROUTE","ADD ROUTE STEPS");return;
+  }
+  SensorFrame f={};sensor.resetTracking();sensor.read(f,calibration,true,settings);
+  if(!f.seen || (!f.fullMarker && (f.pos<-4200 || f.pos>4200))) {
+    notice("START LINE INVALID","CENTER ON LINE");return;
+  }
+  page=Page::Countdown;
+  countdownStartMs=millis();
+  countdownStep=3;
+  drawCountdown(3);
+  soundChime(Chime::Countdown);
 #endif
 }
 static void enterMenu() {
@@ -540,8 +698,17 @@ static void handleButton(uint8_t event) {
     }
     return;
   }
-  if(page==Page::Arm) {if(event==3)raceStart();return;}
-  if(page==Page::ScanPrompt) {if(event==3)performScan();return;}
+  if(page==Page::Arm) {if(event==3)armLaunch();return;}
+  if(page==Page::Countdown) {
+    if(event==3) { soundChime(Chime::Go); raceStart(); }
+    else if(event==4) { motors.stop(); drawArm(); }
+    return;
+  }
+  if(page==Page::ScanPrompt) {
+    if(event==1) performAutoSweep();
+    else if(event==3) performScan();
+    return;
+  }
   if(page==Page::MotorPrompt) {if(event==3)motorBenchStart();return;}
   if(page==Page::Tune) {
     if(event==1)modifyTune(1);
@@ -608,15 +775,31 @@ void setup() {
 }
 void loop() {
   // Independent raw BACK polling. This runs before every motor update.
-  if((page==Page::Race || page==Page::MotorTest) && backIsDown()) {
+  if((page==Page::Race || page==Page::MotorTest || page==Page::Countdown) && backIsDown()) {
     motors.stop();
     if(page==Page::Race)finishRace("BACK E-STOP");
+    else if(page==Page::Countdown)drawArm();
     else drawMenu();
     return;
   }
   const uint8_t event=buttonEvent();
   handleButton(event);
   const uint32_t nowMs=millis();
+
+  if(page==Page::Countdown) {
+    const uint32_t elapsed=nowMs-countdownStartMs;
+    if(elapsed<500) {
+      if(countdownStep!=3) {countdownStep=3;drawCountdown(3);soundChime(Chime::Countdown);}
+    } else if(elapsed<1000) {
+      if(countdownStep!=2) {countdownStep=2;drawCountdown(2);soundChime(Chime::Countdown);}
+    } else if(elapsed<1500) {
+      if(countdownStep!=1) {countdownStep=1;drawCountdown(1);soundChime(Chime::Countdown);}
+    } else {
+      soundChime(Chime::Go);
+      raceStart();
+    }
+    return;
+  }
 
   if(page==Page::MotorTest) {
     if(nowMs-lastMotorTickMs>=5) {
@@ -657,6 +840,14 @@ void loop() {
       if(!controller.active()) {
         finishRace(controller.state()==DriveState::Finished?"FINISH MARKER":"TRACK / ROUTE FAULT");
         return;
+      }
+      if(command.left>raceTopSpeed) raceTopSpeed=command.left;
+      if(command.right>raceTopSpeed) raceTopSpeed=command.right;
+      if(nowMs<raceLaunchUntilMs) {
+        // Anti-slip launch cap for first 140ms
+        const int16_t launchCap=int16_t((uint16_t(settings.basePWM)*75U)/100U);
+        command.left=clamp16(command.left,-launchCap,launchCap);
+        command.right=clamp16(command.right,-launchCap,launchCap);
       }
       motors.drive(command,settings,true);
 #if LFR_RACE_TELEMETRY
