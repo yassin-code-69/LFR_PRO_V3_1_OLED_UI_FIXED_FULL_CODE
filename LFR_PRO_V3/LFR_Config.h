@@ -61,7 +61,7 @@ enum class LineMode : uint8_t { Black=0, White=1 };
 enum class NavMode : uint8_t { Straight=0, Left=1, Right=2, Script=3 };
 enum class RouteStep : uint8_t { Straight=0, Left=1, Right=2, UTurn=3 };
 enum class GapMode : uint8_t { Recover=0, Stop=1 };
-enum class Profile : uint8_t { Safe=0, Balanced=1, Fast=2 };
+enum class Profile : uint8_t { Safe=0, Balanced=1, Fast=2, Sprint=3, Technical=4 };
 enum class DriveState : uint8_t {
   Idle, Follow, Gap, Pivot, JunctionAdvance, Marker, Finished, Fault
 };
@@ -116,24 +116,36 @@ inline Settings defaultSettings() {
   return s;
 }
 inline void setProfile(Settings &s, uint8_t profile) {
-  s.speedProfile=profile%3;
+  s.speedProfile=profile%5;
   if (s.speedProfile==0) {
+    // SAFE: Practice / bench testing
     s.basePWM=76; s.maxPWM=112; s.curvePWM=52; s.turnPWM=83;
     s.accelStep=10; s.brakeStep=28;
     s.kpX10=120; s.kiX100=120; s.kdX100=18;
   } else if (s.speedProfile==1) {
+    // BALANCED: General purpose competition
     s.basePWM=96; s.maxPWM=150; s.curvePWM=62; s.turnPWM=100;
     s.accelStep=12; s.brakeStep=32;
     s.kpX10=140; s.kiX100=90; s.kdX100=23;
-  } else {
-    // Pro Competition Profile (User Track-Verified Winning Setup)
+  } else if (s.speedProfile==2) {
+    // FAST: Pro Competition (User Track-Verified Winning Setup)
     s.basePWM=165; s.maxPWM=220; s.curvePWM=75; s.turnPWM=125;
     s.accelStep=30; s.brakeStep=45; s.junctionAdvanceMs=25;
     s.kpX10=210; s.kiX100=0; s.kdX100=38;
+  } else if (s.speedProfile==3) {
+    // SPRINT: Maximum straight-line speed for wide open tracks
+    s.basePWM=185; s.maxPWM=220; s.curvePWM=90; s.turnPWM=135;
+    s.accelStep=28; s.brakeStep=40; s.junctionAdvanceMs=22;
+    s.kpX10=230; s.kiX100=0; s.kdX100=42;
+  } else {
+    // TECHNICAL: Tight curves, heavy braking, complex tracks
+    s.basePWM=130; s.maxPWM=190; s.curvePWM=60; s.turnPWM=110;
+    s.accelStep=18; s.brakeStep=50; s.junctionAdvanceMs=30;
+    s.kpX10=190; s.kiX100=50; s.kdX100=35;
   }
 }
 inline bool saneSettings(const Settings &s) {
-  if (s.lineMode>1 || s.navMode>3 || s.gapMode>1 || s.speedProfile>2 ||
+  if (s.lineMode>1 || s.navMode>3 || s.gapMode>1 || s.speedProfile>4 ||
       s.mirror>1 || s.finishOn>1 || s.routeCount>ROUTE_CAPACITY ||
       s.curvePWM<35 || s.basePWM<50 || s.maxPWM>220 || s.turnPWM<45 ||
       s.turnPWM>155 || s.maxPWM<s.basePWM || s.basePWM<s.curvePWM ||

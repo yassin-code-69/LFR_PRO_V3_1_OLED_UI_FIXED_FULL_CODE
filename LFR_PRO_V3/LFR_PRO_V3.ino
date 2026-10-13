@@ -103,7 +103,13 @@ static const char* const names[]={
 static constexpr uint8_t MENU_ITEMS=sizeof(names)/sizeof(names[0]);
 static const char *noticeOne="",*noticeTwo="";
 static const char* profileName() {
-  return settings.speedProfile==0?"SAFE":settings.speedProfile==1?"BALANCED":"FAST";
+  switch(settings.speedProfile) {
+    case 0:return "SAFE";
+    case 1:return "BALANCED";
+    case 2:return "FAST";
+    case 3:return "SPRINT";
+    default:return "TECHNICAL";
+  }
 }
 static const char* navName() {
   return settings.navMode==0?"STRAIGHT":settings.navMode==1?"LEFT":
@@ -121,7 +127,7 @@ static const char* modeTitle(ModeKind k) {
   }
 }
 static uint8_t modeCount(ModeKind k) {
-  if(k==ModeKind::Speed)return 3;
+  if(k==ModeKind::Speed)return 5;
   if(k==ModeKind::Navigation)return 4;
   return 2;
 }
@@ -137,7 +143,7 @@ static uint8_t modeActual(ModeKind k) {
 }
 static const char* modeLabel(ModeKind k,uint8_t v) {
   switch(k) {
-    case ModeKind::Speed:return v==0?"SAFE":v==1?"BALANCED":"FAST";
+    case ModeKind::Speed:return v==0?"SAFE":v==1?"BALANCED":v==2?"FAST":v==3?"SPRINT":"TECHNICAL";
     case ModeKind::Line:return v==0?"BLACK":"WHITE";
     case ModeKind::Navigation:return v==0?"STRAIGHT":v==1?"LEFT":v==2?"RIGHT":"SCRIPT";
     case ModeKind::Gap:return v==0?"RECOVER":"STOP";

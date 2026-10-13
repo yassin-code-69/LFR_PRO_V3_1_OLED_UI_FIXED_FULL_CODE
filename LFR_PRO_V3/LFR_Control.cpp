@@ -18,6 +18,8 @@ void Controller::start(uint32_t nowMs,int16_t initialPosition) {
   pivotDirection_=-1;pivotMinimumMs_=38;pivotMaximumMs_=900;
   junctions_=routeUsed_=0;
   pending_=RouteStep::Straight;
+  cornerBrakeFrames_=0;
+  lastGoodError_=0.0f;lastGoodRate_=0.0f;
   pid_.reset(float(initialPosition)*0.001f);
 }
 void Controller::stop() {state_=DriveState::Idle;pid_.reset();}
@@ -75,7 +77,20 @@ Command Controller::follow(const SensorFrame &f,const Settings &s,float dt) {
   if((f.leftEdge || f.rightEdge) && !f.junction && !f.fullMarker && fabsf(error)>3.2f) {
     edgePenalty=0.80f;
   }
-  const float curvature=clampF(fmaxf(fmaxf(anglePenalty,speedPenalty),edgePenalty),0.f,1.f);
+
+  // ── Corner Anticipation & Feedforward Pre-braking ──
+  // When outer sensors (positions 2-3 or 10-11) start picking up the line,
+  // it means a curve is approaching. Pre-decelerate BEFORE PID reacts.
+  const bool outerLeft =(f.norm[2]>=280 || f.norm[3]>=280) && fabsf(error)>1.5f;
+  const bool outerRight=(f.norm[10]>=280 || f.norm[11]>=280) && fabsf(error)>1.5f;
+  if((outerLeft || outerRight) && !f.junction && !f.fullMarker) {
+    if(cornerBrakeFrames_<20) ++cornerBrakeFrames_;
+  } else {
+    if(cornerBrakeFrames_>0) --cornerBrakeFrames_; // gradual release, not abrupt
+  }
+  // Feedforward brake intensity scales with how long we've been seeing approach
+  const float anticipationPenalty=clampF(float(cornerBrakeFrames_)/8.0f,0.0f,0.75f);
+  const float curvature=clampF(fmaxf(fmaxf(fmaxf(anglePenalty,speedPenalty),edgePenalty),anticipationPenalty),0.f,1.f);
 
   // Dynamic Straightaway Turbo Boost:
   // Smoothly ramp up toward maxPWM when dead center (<0.65) and calm rate (<18)
@@ -99,6 +114,12 @@ Command Controller::follow(const SensorFrame &f,const Settings &s,float dt) {
                       !f.fullMarker && fabsf(error)<2.8f;
   const float steering=pid_.update(error,dt,s,float(s.maxPWM),stable);
   lastPos_=f.pos;
+
+  // ── Ghost Recovery Memory: save last good line state ──
+  if(f.seen && !f.junction && !f.fullMarker && f.confidence>=350) {
+    lastGoodError_=error;
+    lastGoodRate_=rate;
+  }
 
   // Proportional differential steering:
   // Smoothly allows the inner wheel to slow down, cross zero, and apply active
@@ -145,11 +166,15 @@ Command Controller::tick(const SensorFrame &f,const Settings &s,
     if(elapsed>(s.gapMode==uint8_t(GapMode::Stop)?55U:180U)) {
       enter(DriveState::Fault,nowMs);return stop;
     }
-    // True Gap Recover: hold forward trajectory smoothly across the gap without spinning in circles!
+    // ── Ghost Recovery: use remembered line velocity for intelligent gap recovery ──
+    // Instead of going straight, steer toward where the line was heading.
     const int16_t forwardPWM = int16_t((uint16_t(s.basePWM) + uint16_t(s.curvePWM)) / 2U);
-    const int16_t bias=clamp16(lastPos_/450,-10,10);
-    return Command{clamp16(int32_t(forwardPWM)+bias,0,s.maxPWM),
-                   clamp16(int32_t(forwardPWM)-bias,0,s.maxPWM)};
+    // Combine last position bias with rate-based prediction for smarter tracking
+    const float positionBias = clampF(float(lastPos_) / 450.0f, -10.0f, 10.0f);
+    const float rateBias = clampF(lastGoodRate_ * 0.02f, -8.0f, 8.0f);
+    const int16_t totalBias = clamp16(int32_t(positionBias + rateBias), -15, 15);
+    return Command{clamp16(int32_t(forwardPWM)+totalBias,0,s.maxPWM),
+                   clamp16(int32_t(forwardPWM)-totalBias,0,s.maxPWM)};
   }
 
   if(state_==DriveState::Marker) {
@@ -204,16 +229,20 @@ Command Controller::tick(const SensorFrame &f,const Settings &s,
     return Command{forwardPWM,forwardPWM};
   }
 
-  // For real 90-degree corners, the far edge can be the only detected region.
+  // ── Enhanced 90° Sharp Turn Fast Lock ──
+  // Detect when the line has moved to the extreme edge (only far-side sensors lit).
+  // Responds in 1 frame with strong position guard for instant zero-radius pivot.
   int8_t side=0;
   if(!f.junction && !f.center && f.active<=5 &&
-     f.leftEdge && !f.rightEdge && f.pos<-4450) side=-1;
+     f.leftEdge && !f.rightEdge && f.pos<-4200) side=-1;
   else if(!f.junction && !f.center && f.active<=5 &&
-          f.rightEdge && !f.leftEdge && f.pos>4450) side=1;
+          f.rightEdge && !f.leftEdge && f.pos>4200) side=1;
   if(side==0) {edgeFrames_=0;edgeDirection_=0;}
   else if(side!=edgeDirection_) {edgeDirection_=side;edgeFrames_=1;}
   else if(edgeFrames_<5) ++edgeFrames_;
-  if(edgeFrames_>=2) {
+  // Single-frame lock when position is extreme (>4800) for immediate response
+  const bool instantLock=(side!=0 && fabsf(float(f.pos))>4800.0f);
+  if(edgeFrames_>=2 || instantLock) {
     lastPos_=f.pos;
     startPivot(side,nowMs,f.center,38,900);
     return pivot(s);

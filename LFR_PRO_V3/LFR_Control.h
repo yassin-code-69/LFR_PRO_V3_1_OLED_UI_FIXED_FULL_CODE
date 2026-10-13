@@ -24,6 +24,11 @@ private:
   uint16_t pivotMinimumMs_=90,pivotMaximumMs_=900;
   RouteStep pending_=RouteStep::Straight;
   uint8_t junctions_=0,routeUsed_=0;
+  // Corner Anticipation: counts consecutive frames where outer sensors detect line approaching edges
+  uint8_t cornerBrakeFrames_=0;
+  // Ghost Recovery Memory: remembers last good line state for intelligent gap recovery
+  float lastGoodError_=0.0f;
+  float lastGoodRate_=0.0f;
   void enter(DriveState state,uint32_t nowMs);
   void startPivot(int8_t direction,uint32_t nowMs,bool wasCenter,
                   uint16_t minimum=90,uint16_t maximum=900);
