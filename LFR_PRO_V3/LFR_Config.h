@@ -27,7 +27,7 @@
 #endif
 #endif
 #ifndef LFR_PIN_BUZZER
-#define LFR_PIN_BUZZER -1 // Set to GPIO pin (e.g. PB0, PA8) when physical buzzer is connected
+#define LFR_PIN_BUZZER PB4 // Set to GPIO pin (e.g. PB0, PA8) when physical buzzer is connected
 #endif
 
 // FIRST INSTALL: 0 = diagnose only; after checking sensor map, motor direction,
