@@ -14,6 +14,7 @@
 #define PA9 9U
 #define PA10 10U
 #define PB3 19U
+#define PB4 20U
 #define PB5 21U
 #define PB8 24U
 #define PB9 25U
@@ -28,6 +29,33 @@
 struct MockAFIO {uint32_t MAPR=0;};
 extern MockAFIO mockAfio;
 #define AFIO (&mockAfio)
+// Mock GPIOA for BSRR-based fast MUX switching in tests.
+// The BSRR write atomically sets (bits 0-15) and resets (bits 16-31) pins.
+struct MockGPIO {
+  uint32_t ODR=0;
+  // BSRR: writing sets bits [0:15] and resets bits [16:31] in ODR
+  void writeBSRR(uint32_t val) {
+    ODR |= (val & 0x0000FFFFU);        // SET bits
+    ODR &= ~((val >> 16) & 0x0000FFFFU); // RESET bits
+  }
+};
+extern MockGPIO mockGpioA;
+// Macro that maps GPIOA->BSRR writes to the mock
+#define GPIOA (&mockGpioA)
+// Override -> operator for BSRR assignment via proxy
+struct GPIOProxy {
+  MockGPIO* gpio;
+  struct BSRRWriter {
+    MockGPIO* gpio;
+    BSRRWriter& operator=(uint32_t val) { gpio->writeBSRR(val); return *this; }
+  };
+  BSRRWriter BSRR;
+};
+// We need GPIOA->BSRR = value to work. Redefine GPIOA to use the proxy.
+#undef GPIOA
+extern GPIOProxy mockGpioAProxy;
+#define GPIOA (&mockGpioAProxy)
+
 extern uint64_t mockMicro;
 extern int mockDigital[64];
 extern int mockPwm[64];

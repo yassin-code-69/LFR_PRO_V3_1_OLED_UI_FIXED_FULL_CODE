@@ -358,6 +358,7 @@ static void performAutoSweep() {
     haveCalibration=true;
     changed=true;
     sensor.resetTracking();
+    sensor.buildNormTable(calibration);
     soundChime(Chime::Success);
     notice("AUTO CAL SUCCESS","14/14 SENSORS OK");
   } else {
@@ -389,6 +390,7 @@ static void performScan() {
     haveCalibration=true;
     scannedWhite=scannedBlack=false;
     sensor.resetTracking();changed=true;
+    sensor.buildNormTable(calibration);
     soundChime(Chime::Success);
     notice("CAL VALID 14/14","USE SAVE SETTINGS");return;
   }
@@ -770,6 +772,7 @@ void setup() {
     Serial1.println("V3: VERIFIED EEPROM DUAL-SLOT SETTINGS");
   }
   pendingCalibration=calibration;
+  if(haveCalibration) sensor.buildNormTable(calibration);
   if(!saneSettings(settings)) {settings=defaultSettings();haveCalibration=false;}
   Serial1.println("LFR PRO V3 - FULL PID - SERIAL1 115200");
 #if LFR_ALLOW_RACE_START == 0
