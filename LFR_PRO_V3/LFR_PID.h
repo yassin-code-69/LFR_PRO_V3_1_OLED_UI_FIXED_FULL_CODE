@@ -5,7 +5,8 @@ class PID {
 public:
   void reset(float initialMeasurement=0.0f);
   float update(float error, float dt, const Settings &cfg,
-               float outputLimit, bool integrate);
+               float outputLimit, bool integrate,
+               float kpScale = 1.0f, float kdScale = 1.0f);
   float integral() const { return integral_; }
 private:
   float lastError_=0.0f;

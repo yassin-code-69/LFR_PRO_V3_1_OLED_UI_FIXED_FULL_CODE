@@ -110,9 +110,28 @@ Command Controller::follow(const SensorFrame &f,const Settings &s,float dt) {
   if(f.confidence<300) speed-=6.f;
   if(speed<float(s.curvePWM)) speed=s.curvePWM;
 
+  // ── Adaptive Gain Scheduling ──
+  // 1. High-Speed Straight Sprint (straightFrames_ >= 10):
+  //    As the robot accelerates along open straights, reduce Kp (down to 0.82x) to eliminate
+  //    high-speed tail flutter, and increase Kd (up to 1.28x) for rock-solid straight damping.
+  // 2. Corner Entry & Tight Curves (curvature > 0.28):
+  //    As lateral error or approach rate rises, scale up Kp (up to 1.20x) to give maximum
+  //    steering torque and bite, while maintaining balanced Kd.
+  float kpScale = 1.0f;
+  float kdScale = 1.0f;
+  if(straightFrames_ >= 10) {
+    const float straightFactor = clampF(float(straightFrames_ - 10) / 20.0f, 0.0f, 1.0f);
+    kpScale -= 0.18f * straightFactor;
+    kdScale += 0.28f * straightFactor;
+  } else if(curvature > 0.28f) {
+    const float curveFactor = clampF((curvature - 0.28f) / 0.50f, 0.0f, 1.0f);
+    kpScale += 0.20f * curveFactor;
+    kdScale += 0.10f * curveFactor;
+  }
+
   const bool stable = f.active<=5 && f.confidence>=250 && !f.junction &&
                       !f.fullMarker && fabsf(error)<2.8f;
-  const float steering=pid_.update(error,dt,s,float(s.maxPWM),stable);
+  const float steering=pid_.update(error,dt,s,float(s.maxPWM),stable,kpScale,kdScale);
   lastPos_=f.pos;
 
   // ── Ghost Recovery Memory: save last good line state ──
@@ -166,15 +185,17 @@ Command Controller::tick(const SensorFrame &f,const Settings &s,
     if(elapsed>(s.gapMode==uint8_t(GapMode::Stop)?55U:180U)) {
       enter(DriveState::Fault,nowMs);return stop;
     }
-    // ── Ghost Recovery: use remembered line velocity for intelligent gap recovery ──
-    // Instead of going straight, steer toward where the line was heading.
+    // ── Ghost Recovery: Curve-Aware Predictive Arc Coasting ──
+    // Instead of driving blind or with a rigid tiny offset, coast along the circular arc
+    // calculated from line position offset and lateral yaw velocity right before the gap.
     const int16_t forwardPWM = int16_t((uint16_t(s.basePWM) + uint16_t(s.curvePWM)) / 2U);
-    // Combine last position bias with rate-based prediction for smarter tracking
-    const float positionBias = clampF(float(lastPos_) / 450.0f, -10.0f, 10.0f);
-    const float rateBias = clampF(lastGoodRate_ * 0.02f, -8.0f, 8.0f);
-    const int16_t totalBias = clamp16(int32_t(positionBias + rateBias), -15, 15);
-    return Command{clamp16(int32_t(forwardPWM)+totalBias,0,s.maxPWM),
-                   clamp16(int32_t(forwardPWM)-totalBias,0,s.maxPWM)};
+    // Arc decay over elapsed time (decays by up to 35% across the gap to prevent over-steering)
+    const float decay = 1.0f - clampF(float(elapsed) / 220.0f, 0.0f, 0.35f);
+    // Predictive differential: combines position displacement + angular rate
+    const float arcBias = (lastGoodError_ * 10.0f + lastGoodRate_ * 0.12f) * decay;
+    const int16_t steerPWM = clamp16(int32_t(arcBias), -42, 42);
+    return Command{clamp16(int32_t(forwardPWM) + steerPWM, 0, s.maxPWM),
+                   clamp16(int32_t(forwardPWM) - steerPWM, 0, s.maxPWM)};
   }
 
   if(state_==DriveState::Marker) {

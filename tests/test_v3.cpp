@@ -70,15 +70,27 @@ static void testCorners() {
 static void testGap() {
   Settings s=defaultSettings();Controller c;
   c.start(0,0);
-  c.tick(frame(0,false),s,5,.005f);
+  // Straight gap test: symmetric coast
+  c.tick(frame(0),s,2,.005f);
+  Command straightGap=c.tick(frame(0,false),s,5,.005f);
   assert(c.state()==DriveState::Gap);
+  assert(straightGap.left == straightGap.right);
   for(uint32_t t=10;t<200;t+=5)c.tick(frame(0,false),s,t,.005f);
   assert(c.state()==DriveState::Fault);
+
+  // Curved gap test: arc coasting following previous turn direction
+  c.start(0,2500);
+  c.tick(frame(2500),s,2,.005f);
+  c.tick(frame(0,false),s,5,.005f);
+  assert(c.state()==DriveState::Gap);
+  Command curveGap=c.tick(frame(0,false),s,10,.005f);
+  assert(curveGap.left > curveGap.right);
+
   s.gapMode=uint8_t(GapMode::Stop);c.start(0,0);
   c.tick(frame(0,false),s,5,.005f);
   c.tick(frame(0,false),s,65,.005f);
   assert(c.state()==DriveState::Fault);
-  printf("PASS short gap safety and STOP policy\n");
+  printf("PASS short gap safety, STOP policy, and predictive curve arc coasting\n");
 }
 static void testScript() {
   Settings s=defaultSettings();s.navMode=3;

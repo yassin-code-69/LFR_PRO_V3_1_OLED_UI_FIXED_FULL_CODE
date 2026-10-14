@@ -15,7 +15,7 @@
 #include "LFR_Control.h"
 #include "LFR_Storage.h"
 using namespace lfr;
-
+ 
 static TinyOLED oled;
 static Sensor sensor;
 static Motors motors;

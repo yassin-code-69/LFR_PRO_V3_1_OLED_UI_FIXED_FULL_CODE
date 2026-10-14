@@ -9,14 +9,15 @@ void PID::reset(float initialError) {
   initialized_=true;
 }
 float PID::update(float error, float dt, const Settings &cfg,
-                  float limit, bool integrate) {
+                  float limit, bool integrate,
+                  float kpScale, float kdScale) {
   if (!(dt>0.0f) || dt>0.03f) {
     reset(error); return 0.0f;
   }
   if (!initialized_) reset(error);
-  const float kp=float(cfg.kpX10)*0.1f;
+  const float kp=float(cfg.kpX10)*0.1f * kpScale;
   const float ki=float(cfg.kiX100)*0.01f;
-  const float kd=float(cfg.kdX100)*0.01f;
+  const float kd=float(cfg.kdX100)*0.01f * kdScale;
   // Filtering D: 0.70/0.30 gives crisp corner damping without phase lag or sensor twitch.
   const float rawRate=bound((error-lastError_)/dt,-240.0f,240.0f);
   dFiltered_=0.70f*dFiltered_+0.30f*rawRate;
